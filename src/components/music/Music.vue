@@ -3,14 +3,23 @@
     <div id="music-bg"></div>
 
     <div id="music-main">
-      <audio ref="audio" id="audio" :src="musicUrl"></audio>
-
+      <!-- 音乐播放控件 -->
+      <audio ref="audio" id="audio" class="dn"
+             :src="audio.musicUrl" :preload="audio.preload"
+             @play="onPlay"
+             @error="onError"
+             @waiting="onWaiting"
+             @pause="onPause"
+             @timeupdate="onTimeupdate"
+             @loadedmetadata="onLoadedmetadata"
+      ></audio>
       <!--      <el-header height="30">Header</el-header>-->
+      <!-- 播放列表和歌词布局 -->
       <el-main class="music-list">
         <div>
-          <el-input v-model="searchTerms"  placeholder="搜索"></el-input>
+          <el-input v-model="searchTerms" placeholder="搜索"></el-input>
           <el-button plain style="margin-left: 8px">我的歌单</el-button>
-          <el-button plain style="margin-left: 8px">推荐d歌单</el-button>
+          <el-button plain style="margin-left: 8px">推荐歌单</el-button>
         </div>
 
         <!--     歌曲播放列表     -->
@@ -35,7 +44,11 @@
                 width="auto">
               <template slot-scope="scope">
                 <span v-if="scope.row.song!=null" class="cellHeight">{{ scope.row.song }}</span>
-                <div style="float: right"><i class="iconfont ationIcon cellHeight icon-play"></i></div>
+                <div style="float: right">
+                  <svg class="icon ationIcon cellHeight" aria-hidden="true">
+                    <use xlink:href="#icon-play"></use>
+                  </svg>
+                </div>
               </template>
             </el-table-column>
             <el-table-column
@@ -50,8 +63,11 @@
                 width="80">
               <template slot-scope="scope">
                 <span v-if="scope.row.time!=null" class="cellHeight">{{ scope.row.time }}</span>
-                <div v-if="scope.row.time!=null" style="float: right"><i
-                    class="iconfont ationIcon cellHeight icon-delete"></i></div>
+                <div v-if="scope.row.time!=null" style="float: right">
+                  <svg class="icon ationIcon cellHeight" aria-hidden="true">
+                    <use xlink:href="#icon-delete"></use>
+                  </svg>
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -85,32 +101,55 @@
         </el-col>
       </el-main>
 
-
+      <!-- 底部音频控制布局 播放音乐、暂停音乐 单曲循环、音量控制 -->
       <el-footer class="musicBar">
         <el-row :class="screenWidth < 600 ? 'playControl1' :'playControl2'">
           <!--    控制播放按钮  内部flex布局   -->
           <el-col :class="screenWidth < 600 ? 'controlButton1' : ' controlButton2'">
-            <i class="iconfont icon-last"></i>
-            <!--            <i class="iconfont ">&#xe60f;</i>-->
-            <i class="iconfont pauseMusic icon-playBtn" id="playBtn" @click="playMusic"></i>
-            <i class="iconfont icon-next"></i>
+            <svg class="icon icon-last" aria-hidden="true">
+              <use xlink:href="#icon-last"></use> <!-- 播放上一首图标 -->
+            </svg>
+            <svg id="playMusicBtn" class="icon palyBtnStyle" aria-hidden="true" @click="startPlayOrPause">
+              <use v-show="!showPauseBtn" xlink:href="#icon-playBtn"></use> <!-- 播放按钮 -->
+              <use v-show="showPauseBtn" xlink:href="#icon-pauseBtn"></use> <!-- 暂停按钮 -->
+            </svg>
+            <svg class="icon icon-next" aria-hidden="true">
+              <use xlink:href="#icon-next"></use><!-- 播放下一首图标 -->
+            </svg>
           </el-col>
 
           <!--    音乐播放进度条   根据屏幕宽度调整宽度   -->
           <el-col :class=" screenWidth < 600 ? 'sliderWidth1' : screenWidth < 768 ? 'sliderWidth2' : 'sliderWidth3'">
-            <span class="songName">永不失联的爱</span>
-            <span
-                class="timeProgress">{{ this.formatTooltip(this.value2) + "/" + this.formatTooltip(this.value) }}</span>
-            <!--            <lb-slider  v-model="value2"/>-->
-            <el-slider v-model="value2" :max="value" :format-tooltip="formatTooltip"></el-slider>
+            <span class="songName">{{ audio.songName }}</span><!-- 当前播放的歌曲名称 -->
+            <span class="timeProgress">
+              <!--  歌曲播放的时间 和 歌曲时长   -->
+              {{ this.formatTooltip(audio.currentTime) + "/" + this.formatTooltip(this.audio.maxTime) }}
+            </span>
+            <!-- 右侧歌词面板隐藏后，显示这个mini歌词 -->
+            <span v-show="screenWidth < 991" class="miniLyric">歌词</span>
+            <el-slider :max="value" v-model="sliderTime" :show-tooltip="false"
+                       @change="changeCurrentTime"></el-slider><!--  播放音乐的进度条  -->
           </el-col>
-          <!--    右侧功能     -->
-          <i :class="screenWidth < 600 ? 'iconfont icon-list-sequence switchBtn1' :'iconfont icon-list-sequence myFontStyle'"></i>
-          <i :class=" screenWidth < 600 ? 'iconfont icon-comment switchBtn2' :'iconfont icon-comment myFontStyle' "></i>
+          <!-- 下面是最右侧的图标   播放模式切换图标： 顺序播放、随机播放、单曲循环     -->
+          <svg class="icon" :class="screenWidth < 600 ? 'listSequenceStyle2' :'myFontStyle'" @click="changeMode"
+               aria-hidden="true">
+            <use v-show="audio.mode==1" xlink:href="#icon-circleOnlyOne"></use><!-- 单曲循环-->
+            <use v-show="audio.mode==2" xlink:href="#icon-list-sequence"></use><!-- 列表循环-->
+            <use v-show="audio.mode==3" xlink:href="#icon-random"></use><!-- 随机播放-->
+          </svg>
+          <!--    评论图标    -->
+          <svg class="icon" :class="screenWidth < 600 ? 'commentStyle2' : 'myFontStyle'" aria-hidden="true">
+            <use xlink:href="#icon-el-icon-chat"></use>
+          </svg>
+          <!--    音量控制    -->
           <div class="volumeIcon" v-show="screenWidth > 600 ">
-            <!--            <i class="iconfont fontStyle">&#xe603;</i>-->
-            <i class="iconfont myFontStyle icon-volumn-close"></i>
-            <el-slider class="volumeSlider" v-if="screenWidth >= 768" v-model="volumeValue" :max="100"></el-slider>
+            <!-- 静音或取消静音图标 -->
+            <svg class="icon myFontStyle" aria-hidden="true" @click="startMutedOrNot">
+              <use v-show="!audio.muted" xlink:href="#icon-volume"></use><!--喇叭图标-->
+              <use v-show="audio.muted" xlink:href="#icon-volumn-close"></use><!--静音图标-->
+            </svg>
+            <el-slider class="volumeSlider" v-if="screenWidth >= 768" :max="100" v-model="audio.volume"
+                       :format-tooltip="formatVolumeToolTip" @change="changeVolume"></el-slider><!--音量条-->
           </div>
 
 
@@ -128,11 +167,40 @@ export default {
   name: 'Music',
   data() {
     return {
-      searchTerms:"",
-      musicUrl: "https://music.163.com/song/media/outer/url?id=523250334.mp3",
-      volumeValue: 60,
-      value: 100,/*测试值，需要根据歌曲的时间变化，单位秒*/
-      value2: 0,
+      showPauseBtn: false,// 显示播放按钮
+      audio: {
+        mode: 2,// 1表示单曲循环、2表示顺序播放、3表示随机播放
+        musicUrl: "https://music.163.com/song/media/outer/url?id=523250334.mp3",// 歌曲的播放地址
+        coverImg: './img/bg1.jpg',// 封面图片
+        songName: '当前歌曲名称',// 歌曲名称
+        currentTime: 0, // 当前播放音乐的时间
+        maxTime: 0,     // 音乐的总时间
+        volume: 50,     // 音量值
+        tempVolume: 0,  // 临时音量，用于记录静音前的音量值
+        volumeMax: 100,  // 最大音量值
+        playing: false, // 是否正在播放
+        muted: false,   // 是否静音
+        speed: 1,// 播放速度
+        waiting: false,// 正在等待音乐资源
+        preload: 'auto' // 自动预加载
+      },
+      controlList: {
+        // 不显示下载
+        noDownload: false,
+        // 不显示静音
+        noMuted: false,
+        // 不显示音量条
+        noVolume: false,
+        // 不显示进度条
+        noProcess: false,
+        // 只能播放一个
+        onlyOnePlaying: false,
+        // 不要快进按钮
+        noSpeed: false
+      },
+      value: 100,
+      searchTerms: "",
+      sliderTime: 0,
       screenWidth: 991,
       screenHeight: 100,
       url: './img/bg1.jpg',
@@ -142,81 +210,173 @@ export default {
           song: '会不会（吉他版）',
           singer: '刘大壮',
           time: '3:41',
-          musicUrl: ""
+          musicUrl: this.prefix + "5352857836" + this.suffix
         }, {
           song: '经济舱 (Live)',
           singer: 'Kafe.Hu',
           time: '3:41',
-          musicUrl: ""
+          musicUrl: this.prefix + "2821115454" + this.suffix
         }, {
           song: '他只是经过',
           singer: 'h3R3/Felix Bennett',
           time: '3:41',
-          musicUrl: ""
+          musicUrl: this.prefix + "5344048011" + this.suffix
+        },
+        {
+          song: '会不会（吉他版）',
+          singer: '刘大壮',
+          time: '3:41',
+          musicUrl: this.prefix + "5352857836" + this.suffix
+        }, {
+          song: '经济舱 (Live)',
+          singer: 'Kafe.Hu',
+          time: '3:41',
+          musicUrl: this.prefix + "2821115454" + this.suffix
+        }, {
+          song: '他只是经过',
+          singer: 'h3R3/Felix Bennett',
+          time: '3:41',
+          musicUrl: this.prefix + "5344048011" + this.suffix
         }, {
           song: '会不会（吉他版）',
           singer: '刘大壮',
           time: '3:41',
-          musicUrl: ""
+          musicUrl: this.prefix + "5352857836" + this.suffix
         }, {
           song: '经济舱 (Live)',
           singer: 'Kafe.Hu',
           time: '3:41',
-          musicUrl: ""
+          musicUrl: this.prefix + "2821115454" + this.suffix
         }, {
           song: '他只是经过',
           singer: 'h3R3/Felix Bennett',
           time: '3:41',
-          musicUrl: ""
+          musicUrl: this.prefix + "5344048011" + this.suffix
         }, {
           song: '会不会（吉他版）',
           singer: '刘大壮',
           time: '3:41',
-          musicUrl: ""
+          musicUrl: this.prefix + "5352857836" + this.suffix
         }, {
           song: '经济舱 (Live)',
           singer: 'Kafe.Hu',
           time: '3:41',
-          musicUrl: ""
+          musicUrl: this.prefix + "2821115454" + this.suffix
         }, {
           song: '他只是经过',
           singer: 'h3R3/Felix Bennett',
           time: '3:41',
-          musicUrl: ""
-        }, {
-          song: '会不会（吉他版）',
-          singer: '刘大壮',
-          time: '3:41',
-          musicUrl: ""
-        }, {
-          song: '经济舱 (Live)',
-          singer: 'Kafe.Hu',
-          time: '3:41',
-          musicUrl: ""
-        }, {
-          song: '他只是经过',
-          singer: 'h3R3/Felix Bennett',
-          time: '3:41',
-          musicUrl: ""
-        }, {
-          song: '会不会（吉他版）',
-          singer: '刘大壮',
-          time: '3:41',
-          musicUrl: ""
-        }, {
-          song: '经济舱 (Live)',
-          singer: 'Kafe.Hu',
-          time: '3:41',
-          musicUrl: ""
-        }, {
-          song: '他只是经过',
-          singer: 'h3R3/Felix Bennett',
-          time: '3:41',
-          musicUrl: ""
+          musicUrl: this.prefix + "5344048011" + this.suffix
         },],
     }
   },
   methods: {
+    changeMode() {
+      this.audio.mode = (this.audio.mode + 1) % 3 + 1 // 得到1，2，3不断的循环
+    },
+    setControlList() {
+      let controlList = this.theControlList.split(' ')
+      controlList.forEach((item) => {
+        if (this.controlList[item] !== undefined) {
+          this.controlList[item] = true
+        }
+      })
+    },
+    changeSpeed() {
+      let index = this.speeds.indexOf(this.audio.speed) + 1
+      this.audio.speed = this.speeds[index % this.speeds.length]
+      this.$refs.audio.playbackRate = this.audio.speed
+    },
+    startMutedOrNot() {
+      this.$refs.audio.muted = !this.$refs.audio.muted
+      this.audio.muted = this.$refs.audio.muted
+      if (this.$refs.audio.muted == true) {
+        this.audio.tempVolume = this.audio.volume //保存静音前的音量值
+        this.audio.volume = 0;// 将音量设置为0
+      } else {
+        this.audio.volume = this.audio.tempVolume //还原到静音前的音量值
+      }
+    },
+    // 音量条toolTip
+    formatVolumeToolTip(index) {
+      return '音量条: ' + index
+    },
+    // 进度条toolTip
+    formatProcessToolTip(index = 0) {
+      index = parseInt(this.audio.maxTime / 100 * index + '')
+      return '进度条: ' + this.formatTooltip(index)
+    },
+    // 音量改变
+    changeVolume(index = 0) {
+      this.$refs.audio.volume = index / 100
+      this.volume = index
+    },
+    // 播放跳转
+    changeCurrentTime(index) {
+      this.$refs.audio.currentTime = parseInt(index / 100 * this.audio.maxTime + '')
+    },
+    startPlayOrPause() {
+      this.showPauseBtn = !this.showPauseBtn // 进行样式的切换
+      return this.audio.playing ? this.pausePlay() : this.startPlay()
+    },
+    // 开始播放
+    startPlay() {
+      this.$refs.audio.play()
+    },
+    // 暂停
+    pausePlay() {
+      this.$refs.audio.pause()
+    },
+    // 当音频暂停
+    onPause() {
+      this.audio.playing = false
+    },
+    // 当发生错误, 就出现loading状态
+    onError() {
+      this.audio.waiting = true
+    },
+    // 当音频开始等待
+    onWaiting(res) {
+      console.log(res)
+    },
+    // 当音频开始播放
+    onPlay(res) {
+      console.log(res)
+      this.audio.playing = true
+      this.audio.loading = false
+
+      if (!this.controlList.onlyOnePlaying) {
+        return
+      }
+
+      let target = res.target
+
+      let audios = document.getElementsByTagName('audio');
+
+      [...audios].forEach((item) => {
+        if (item !== target) {
+          item.pause()
+        }
+      })
+    },
+    // 当timeupdate事件大概每秒一次，用来更新音频流的当前播放时间
+    onTimeupdate(res) {
+      this.audio.currentTime = res.target.currentTime
+      this.sliderTime = (res.target.currentTime / this.audio.maxTime) * 100
+    },
+    // 当加载语音流元数据完成后，会触发该事件的回调函数
+    // 语音元数据主要是语音的长度之类的数据
+    onLoadedmetadata(res) {
+      console.log('loadedmetadata')
+      console.log(res)
+      this.audio.waiting = false
+      this.audio.maxTime = parseInt(res.target.duration)
+    },
+
+
+    /**
+     *
+     */
     handleMouseEnter(row, column, cell) {
       this.hover = true;
       console.log(cell)
@@ -224,36 +384,17 @@ export default {
     handleMouseLeave() {
       console.log("离开")
     },
+    /**
+     * 格式化时间
+     */
     formatTooltip(second) {
+
       return [Math.floor(second / 60 % 60), Math.floor(second % 60)].join(":")
           .replace(/\b(\d)\b/g, "0$1");
     },
-    playMusic() {
-      let that = this
-      var audio = document.querySelector('#audio');
-      this.musicUrl = "https://music.163.com/song/media/outer/url?id=523250334.mp3"
-      audio.src = this.musicUrl
-      let palyBth = document.getElementById("playBtn");
 
-      if (palyBth.classList.contains("icon-playBtn")) {
-        palyBth.classList.remove("icon-playBtn")
-        palyBth.classList.add("icon-pauseBtn1")
-        audio.play();
-      } else {
-        palyBth.classList.remove("icon-pauseBtn1")
-        palyBth.classList.add("icon-playBtn")
-        audio.pause();
-      }
-      setInterval(() => {
-        that.value2 = audio.currentTime
-        that.value = audio.duration
-      })
-
-    }
   },
   async mounted() {
-    this.playMusic();
-    this.playMusic();
     const that = this
     setInterval(window.onresize = () => {
       document.getElementById("playList").classList.remove("el-table--enable-row-hover")
@@ -277,15 +418,32 @@ playHeight = 120px
 playControlWidth = 300px
 fluxPX = 12px
 musicLRCWidth = 350px
+// 歌曲名称样式
+.songName
+  height 16px
+  padding 7px 0
+  font-size 7px
+  color white
 
-i
+// 屏幕宽带<991时显示迷你歌词，也就是右侧歌词显示消失时显示它
+.miniLyric
+  font-size 14px
+  padding-left 20px
+  color wheat
+
+// 鼠标移到到svg图标上时改变鼠标指针样式为小手
+svg
   cursor: pointer
+
 >>> .el-input
   min-width 250px
   width 30%
+
+// elementUI输入框样式
 >>> .el-input__inner
   background-color #fff0
-  border: 1px solid hsla(0,0%,100%,.6)
+  border: 1px solid hsla(0, 0%, 100%, .6)
+
 button
   background-color #86709000
 
@@ -296,33 +454,28 @@ button
 
 >>> .el-button
   background #86709000
-  color hsla(0,0%,100%,.6)
-  border-color  hsla(0,0%,100%,.6)
+  color hsla(0, 0%, 100%, .6)
+  border-color hsla(0, 0%, 100%, .6)
+
 >>> .el-button:hover
   background-color #86709000
   border-color white
   color white
 
 
-  //.icon-list-sequence
+//.icon-list-sequence
 //  font-size: 14px;
 //  position: absolute;
 //  width: 60px;
 //  height: 60px;
 //  top: 40px;
 //  left: 5px;
-.pauseMusic
+.palyBtnStyle
   border-radius: 20px;
   width: 40px;
   height: 40px;
   background-color: hsla(0, 0%, 100%, .4)
-  text-align: center
 
-.songName
-  height 16px
-  padding 5px 0
-  font-size 3px
-  color white
 
 .timeProgress
   color white
@@ -332,32 +485,31 @@ button
   float right
 
 .icon-next, .icon-last
-  font-size 30px
+  padding-top 6px;
+  font-size 26px
 
-.icon-playBtn
-  font-size 24px
-
-.switchBtn1
+// 顺序播放、单曲循环图标样式切换
+.listSequenceStyle2
   position absolute
   text-align center
   color white
   font-size 30px
   line-height 30px
-  width 60px
-  height 60px
-  top 45px
-  left 0
+  width 35px
+  height 35px
+  top 48px
+  left -4px
 
-.switchBtn2
+.commentStyle2
   position absolute
   text-align center
   color white
   font-size 30px
   line-height 30px
-  width 60px
-  height 60px
-  top 45px
-  right 0
+  width 35px
+  height 35px
+  top 48px
+  right 2px
 
 .music-list
   overflow-y: hidden
@@ -368,6 +520,7 @@ button
 
 .myFontStyle
   padding-top 5px
+  margin-top 10px;
   margin-left 20px
   width 30px
   height 30px
@@ -378,6 +531,7 @@ button
   display flex
 
 .volumeSlider
+  margin-top 7px
   padding 25px 0 0 10px
   width 115px
 

@@ -20,5 +20,8 @@ npm run build
 npm run lint
 ```
 
+
+使用了ElementUI、stylus语法
+
 ### Customize configuration
 See [Configuration Reference](https://cli.vuejs.org/config/).
